@@ -1,0 +1,4 @@
+"0","pearson.res = residuals(model_logreg_step3,type=""pearson"")"
+"0","deviance.res = residuals(model_logreg_step3,type=""deviance"")"
+"0","par(mfrow = c(1,2))"
+"0","plot(pearson.res, ylab = ""Pearson Residuals"")"

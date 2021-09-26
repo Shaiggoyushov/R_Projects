@@ -1,0 +1,4 @@
+"0",""
+"0","model_rf<-randomForest(BWT~., data = train, mtry = ncol(train)/3, ntree = 250, importance = TRUE)"
+"0","yhat.rf<-predict(model_rf, newdata=test) "
+"0","plot(yhat.rf, test$BWT) "

@@ -1,0 +1,1 @@
+"0","partimat(as.factor(LOW)~AGE+LWT+FTV+PTL, data = test, method=""lda"")"

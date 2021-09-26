@@ -1,0 +1,2 @@
+"0","legend(""topleft"", legend = c(round(rcurve.lda$auc,2), round(rcurve_logreg$auc,2), round(rcurve.bag$auc, 2), round(rcurve.rf$auc,2),  round(rcurve.qda$auc, 2)), "
+"0","       fill = c(""black"", ""green"", ""red"", ""blue"", ""yellow""))"

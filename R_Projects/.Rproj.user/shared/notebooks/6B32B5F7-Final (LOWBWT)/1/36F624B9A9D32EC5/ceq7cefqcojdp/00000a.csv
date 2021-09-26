@@ -1,0 +1,3 @@
+"0","roc.curve(test$LOW, pred2, add.roc = TRUE, col = ""yellow"") #QDA Full model"
+"1","Area under the curve (AUC): 0.671
+"

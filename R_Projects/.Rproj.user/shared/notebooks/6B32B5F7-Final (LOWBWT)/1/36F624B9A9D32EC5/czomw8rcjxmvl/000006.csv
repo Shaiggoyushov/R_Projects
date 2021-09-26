@@ -1,0 +1,3 @@
+"0","veri<-read.table(""C:/Users/shaig.goyushov/Desktop/My_Folder/Personal/DEU/D5007/lowbwt.txt"", header=FALSE)"
+"0","colnames(veri) =  c(""ID"", ""LOW"", ""AGE"", ""LWT"", ""RACE"", ""SMOKE"", ""PTL"", ""HT"", ""UI"", ""FTV"", ""BWT"")"
+"0","head(veri)"

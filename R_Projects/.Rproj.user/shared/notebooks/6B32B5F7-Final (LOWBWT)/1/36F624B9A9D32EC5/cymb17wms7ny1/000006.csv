@@ -1,0 +1,3 @@
+"0",""
+"0","cv.regtree = cv.tree(model_reg.tree) "
+"0","plot(cv.regtree$size, cv.regtree$dev, type=""b"")"

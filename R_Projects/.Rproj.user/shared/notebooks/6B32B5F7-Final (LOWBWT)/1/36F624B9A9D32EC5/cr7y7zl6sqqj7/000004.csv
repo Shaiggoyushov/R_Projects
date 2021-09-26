@@ -1,0 +1,4 @@
+"0","pairs.panels(train[2:9],"
+"0","             gap=0,"
+"0","             bg=c(""red"",""blue"")[train$LOW],"
+"0","             pch=21)"

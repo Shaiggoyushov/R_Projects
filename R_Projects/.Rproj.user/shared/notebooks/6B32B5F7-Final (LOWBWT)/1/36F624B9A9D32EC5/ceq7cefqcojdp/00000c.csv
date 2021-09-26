@@ -1,0 +1,2 @@
+"0","legend(""bottomright"", legend = c(""LDA"", ""Logistic"", ""Bagging"", ""RF"", ""QDA""), "
+"0","       fill = c(""black"", ""green"", ""red"", ""blue"", ""yellow""))"

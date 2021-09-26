@@ -1,0 +1,3 @@
+"0",""
+"0","yhat.lm = predict(model_lm, newdata = test) "
+"0","plot(yhat.lm, test$BWT) "

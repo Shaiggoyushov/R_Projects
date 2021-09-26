@@ -1,0 +1,3 @@
+"0","roc.curve(test$LOW, logreg_pred, add.roc = TRUE, col = ""green"") #logistic"
+"1","Area under the curve (AUC): 0.579
+"

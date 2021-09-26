@@ -1,0 +1,3 @@
+"0",""
+"0","model_tree.cv =prune.misclass(model_tree, best=4)"
+"0","plot(model_tree.cv)"

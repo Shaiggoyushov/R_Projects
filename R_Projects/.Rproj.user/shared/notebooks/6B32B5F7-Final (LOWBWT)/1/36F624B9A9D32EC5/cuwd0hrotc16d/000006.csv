@@ -1,0 +1,33 @@
+"0","summary(model_tree.cv)"
+"1","
+Classification tree:
+"
+"1","snip.tree(tree = model_tree, nodes = 5:7)
+"
+"1","Variables actually used in tree construction:
+"
+"1","[1]"
+"1"," ""LWT"""
+"1"," ""AGE"""
+"1"," ""UI"" "
+"1","
+"
+"1","Number of terminal nodes:  4 
+"
+"1","Residual mean deviance:  1.112 = 142.4 / 128 
+"
+"1","Misclassification error rate:"
+"1"," "
+"1","0.2424"
+"1"," "
+"1","="
+"1"," "
+"1","32"
+"1"," "
+"1","/"
+"1"," "
+"1","132"
+"1"," "
+"1","
+"
+"0","text(model_tree.cv ,pretty =0)"

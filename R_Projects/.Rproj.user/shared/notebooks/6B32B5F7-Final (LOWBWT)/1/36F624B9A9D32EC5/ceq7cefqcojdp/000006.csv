@@ -1,0 +1,3 @@
+"0","roc.curve(test$LOW, predict(model_bagLOW, newdata = test), add.roc = TRUE, col = ""red"") #bagging"
+"1","Area under the curve (AUC): 0.632
+"

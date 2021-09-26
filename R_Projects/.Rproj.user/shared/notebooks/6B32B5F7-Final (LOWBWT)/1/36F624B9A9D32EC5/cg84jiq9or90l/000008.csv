@@ -1,0 +1,7 @@
+"0","(mse_rf = mean((yhat.rf-test$BWT)^2))"
+"1","[1]"
+"1"," 427645.7"
+"1","
+"
+"0","varImpPlot(model_rf)"
+"0",""

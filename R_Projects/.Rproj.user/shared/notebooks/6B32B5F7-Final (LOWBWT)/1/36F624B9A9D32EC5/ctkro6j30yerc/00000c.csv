@@ -1,0 +1,3 @@
+"0",""
+"0","yhat.step_lm = predict(model_step_lm, newdata=test) "
+"0","plot(yhat.step_lm, test$BWT) "

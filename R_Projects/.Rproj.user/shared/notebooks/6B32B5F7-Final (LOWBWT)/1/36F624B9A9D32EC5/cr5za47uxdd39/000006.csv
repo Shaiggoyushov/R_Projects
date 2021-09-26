@@ -1,0 +1,6 @@
+"0","for (i in 1:(ncol(veri)-1)){"
+"0","  hist(x = veri[[i]], "
+"0","          main = sprintf('Hist. of variable: %s',"
+"0","                         colnames(veri[i])), "
+"0","          xlab = colnames(veri[i]))"
+"0","}"

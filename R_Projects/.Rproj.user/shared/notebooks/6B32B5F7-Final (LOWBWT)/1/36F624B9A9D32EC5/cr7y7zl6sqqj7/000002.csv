@@ -1,0 +1,4 @@
+"0","covEllipses(train[,c(""LWT"", ""AGE"", ""FTV"", ""PTL"")], train$LOW, fill = TRUE, pooled = FALSE, "
+"0","            col = c(""blue"", ""red""), variables = c(""LWT"", ""AGE"", ""FTV"", ""PTL""), "
+"0","            fill.alpha = 0.05)"
+"2","train$LOW coerced to factor."

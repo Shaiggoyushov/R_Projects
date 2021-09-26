@@ -1,0 +1,3 @@
+"0","roc.curve(test$LOW, predict(model_rfLOW, newdata = test), add.roc = TRUE, col = ""blue"") #Random Forest"
+"1","Area under the curve (AUC): 0.605
+"

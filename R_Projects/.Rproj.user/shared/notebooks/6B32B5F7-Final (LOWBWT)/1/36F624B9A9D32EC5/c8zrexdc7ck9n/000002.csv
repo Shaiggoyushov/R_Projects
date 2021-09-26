@@ -1,0 +1,4 @@
+"0","set.seed(431)"
+"0","model_bag = randomForest(BWT~., data=train, mtry=8, importance=TRUE)"
+"0","yhat.bag<-predict(model_bag, newdata=test) "
+"0","plot(yhat.bag,test$BWT) "

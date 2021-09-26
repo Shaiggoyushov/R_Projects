@@ -1,0 +1,658 @@
+---
+title: "Final Ödevi (LOWBWT Veri Seti)"
+author: "Shaig Goyushov"
+date: "06 02 2021"
+output: html_document
+---
+
+
+```{r echo = FALSE, message = FALSE}
+library("Hmisc")
+library(corrplot)
+library(olsrr)
+library(MASS)
+library("dplyr")
+library(MPV)
+library(goftest)
+library(lmtest)
+library(ModelMetrics)
+library(DescTools)
+library(blorr)
+library(tree)
+library(leaps)
+library(blorr)
+library(MPV)
+library(randomForest)
+library(car)
+library("psych")
+library(InformationValue)
+library(car)
+library(ISLR)
+library(leaps)
+library(ggplot2)
+library(caret)
+library(boot)
+library(ROSE)
+library(ROCR)
+library(heplots)
+library("psych")
+library(klaR)
+
+```
+
+İlk olarak kullanacağımız veriyi tanımlıyoruz ve veri için header isimlerini belirliyoruz. Linear Regresyon analizi yapacağımız için **LOW** değişkeninin (kategorik bağımlı değişken) veri setinden çıkartıyoruz. 
+
+```{r echo=FALSE, message=FALSE}
+
+veri<-read.table("C:/Users/shaig.goyushov/Desktop/My_Folder/Personal/DEU/D5007/lowbwt.txt", header=FALSE)
+colnames(veri) =  c("ID", "LOW", "AGE", "LWT", "RACE", "SMOKE", "PTL", "HT", "UI", "FTV", "BWT")
+veri = veri[-c(1,2)] #ID ve LOW değişkenleri veri setinden çıkartıldı
+head(veri)
+attach(veri)
+summary(veri)
+
+```
+
+## Tanımlayıcı İstatistikler
+Aşağıdakı korelasyon matrixi, bağımlı ve bağımsız değişkenlerin histogram grafikleri ve scatter plot'ları görebiliriz. Grafiklerden de anladığımız kadarıyla bağımsız değişkenlerin bazılarını kategorik değişken olarak kullanmamız gerekli. Bağımlı değişken olan **BWT (birth weight)** normally distributed olduğu söylenebilir. Shapiro-Wilk test yaptığımızda da p>0.4383 değeri normal dağılım null hipotezini redd edemiyoruz anlamına geliyor. Korelasyon matrix'deki değerlere baktığımızda bağımlı değişken ile en güçlü bağlantı UI bağımsız değişkeninde tespit ediliyor ve bu da oldukça düşük değerdir. Sonuç olarak ileride kuracağımız linear regresyon modelinde iyi sonuç alabilmeme ihtimalimiz yüksek olacaktır (Linear Regresyonun varsayımlarından birisi bağımlı ve bağımsız değişken arasında linear ilişki olmasıdır). Scatter Plot'lardan görebileceğimiz gibi polynomial transformation yapmamız bile güçlü korelasyon değeri almamıza yardımcı olamayacaktır. Sadece tespitimizi onaylamak adına LWT bağımsız değişkeni ve BWT arasında polynomial ilişkiye baktığımızda maksimum alabileceğimiz korelasyon değeri 0.2'e yakın bir değer oluyor. 
+
+```{r echo = FALSE, message = FALSE,  warning = FALSE}
+
+pairs.panels(veri[1:9],
+             gap=0.5,
+             bg=c("red","dark green","blue")[veri$BWT],
+             pch=20, ellipses = FALSE, lm = TRUE)
+
+par(mfrow=c(2,4))
+for (i in 1:(ncol(veri)-1)){
+  hist(x = veri[[i]], 
+          main = sprintf('Hist. of variable: %s',
+                         colnames(veri[i])), 
+          xlab = colnames(veri[i]))
+}
+
+par(mfrow=c(1,1))
+hist(BWT)
+shapiro.test(BWT)
+
+x = seq(-5, 5, 1)
+vec = matrix(NA, nrow = length(x), ncol = 1, dimnames = NULL)
+for (i in x){
+  vec[i, 1] = cor(x = LWT^i, y = BWT)
+}
+plot(vec, xlab = "Power", ylab = "Correlation", main = "BWT vs LWT^power")
+
+
+```
+
+Bir sonrakı adım olarak belirlediğimiz 4 bağımsız değişkeni kategorik değişken olarak tanımlıyoruz. Devamında verimizi train ve test olmak üzere 7:3 oranında ikiye bölüyoruz ve çalışmaya train verisi üzerinden devam ediyoruz. RACE, SMOKE, HI ve UI bağımsız değişkenlerini kategorik olarak belirtiyoruz.
+
+```{r echo=FALSE, message=FALSE}
+
+veri$RACE = as.factor(veri$RACE)
+veri$SMOKE = as.factor(veri$SMOKE)
+veri$HT = as.factor(veri$HT)
+veri$UI = as.factor(veri$UI)
+
+set.seed(431)
+sample_size = floor(0.7*nrow(veri))
+
+train_index = sample(nrow(veri), size = sample_size, replace = FALSE)
+train = veri[train_index,]
+test = veri[-train_index,]
+attach(train)
+```
+
+## Full Linear Regresyon Modeli
+BWT bağımlı değişkeni için ütm bağımsız değişkenleri kullanarak full modeli kuruyoruz ve summary() fonksiyonu ile model çıktısını inceliyoruz. Görebileceğimiz gibi LWT, Age, PTL ve FTV bağımsız değişkenleri için p-value çok yüksek (>0.05) ve bu bağımsız değişkenler için katsayı sıfırdır null hipotezini redd edemiyoruz. Model F-testini başarıyla geçiyor (p < 0.05). F test için null hipotez tüm bağımsız değişken katsayıları sıfırdır söylüyor ve p < 0.05 olduğu için null hipotezi redd ediyoruz. Yani model anlamlıdır. R2 değerimiz 0.2668 ve bu değer oldukça düşük. Adjusted R2 değerinin 0.2128  olması modele katkıda bulunamayan bağımsız değişkenlerin olduğunu isbatlıyor.
+
+Model Shapiro-Wilk testini (null hipotez artıkların normal dağıldığını söylüyor ve test sonucunda p > 0.05 alıyoruz, bu da null hipotezi redd edemiyoruz anlamına geliyor) ve bp testini (null hipotez sabit varyans olduğunu söylüyor ve test sonucunda p > 0.05 alıyoruz, bu da null hipotezi redd edemiyoruz anlamına geliyor) başarıyla geçiyor. QQ plot ve Residual Histogram grafiklerine baktığımız zaman da normal dağılım varsayımını bir daha tespit etmiş oluyoruz. Residuals vs Fitted Values grafiğinde de sabit varyans varsayımını tespit edebiliyoruz. VIF (variance infilation factor) değerleri de oldukça küçük (korelasyon matrix'de de bağımsız değişkenler arasında ciddi bir bağlantı olmadığını görebilmiştik). 
+
+Studentized Residuals grafiğine baktığımızda -2,2 sınır değerlerine çok yakın residualların olduğunu görebiliyoruz. Bu residuallar sınırlara çok yakın olduğundan ve model varsayım testlerini geçtiğinden, modele outlier'ları çıkarmadan devam ediyoruz (kısa olarak **39 ve 95'ci** verilerin diğerlerine kıyasda daha ciddi etken olduğunu Cooks Chart ve Studentized Residuals grafiğinde görebiliyoruz).
+
+
+```{r echo = FALSE, message = FALSE}
+set.seed(431)
+model_lm = lm(BWT ~., data = train)
+summary(model_lm)
+VIF(model_lm)
+shapiro.test(model_lm$residuals)
+bptest(model_lm)
+ols_plot_resid_qq(model_lm)
+ols_plot_resid_hist(model_lm)
+ols_plot_cooksd_chart(model_lm)
+ols_plot_resid_stud_fit(model_lm)
+ols_plot_resid_fit(model_lm)
+
+yhat.lm = predict(model_lm, newdata = test) 
+plot(yhat.lm, test$BWT) 
+abline(0,1)
+(mse_lm = mean((yhat.lm-test$BWT)^2)) 
+
+
+```
+## Stepwise Selection ile kurulan Linear Regresyon Modeli
+Full model kurulduktan sonra bağımsız değişkenlerin katsayıları için yapılan hipotez testindeki p-value değerleri kullanılarak stepwise selection yapılmıştır. Sonuç olarak **UI, SMOKE, RACE, HT, LWT** bağımsız değişkenleri modele dahil edilmiştir. Stepwise selection p-value < 0.05 olan değişkenleri modele dahil ediyor ve modele yeni değişken dahil edildiği zaman mevcut değişkenlerden her hangi biri için p-value > 0.10 olduğu zaman modelden çıkartılıyor. 0.05 ve 0.10 threshold'ları farklı değerler olarak da girilebilir ve bu sonuç olarak elde edeceğimiz modeldeki bağımsız değişken sayısını etkileyebilir. 
+
+Stepwise selection metodü ile belirlediğimiz bağımsız değişkenleri kullanarak yeni modelimizi kuruyoruz.
+QQ plot ve Residuals Histogram plotlarına baktığımızda normal dağılımı görebiliyoruz. Model Shapiro-Wilk testini de geçebildiği için artıkların normal dağılımı varsayımı karşılanmış oluyor. Aynı şekilde Residuals vs Fitted values grafiğinden ve bptest'den sabit varyans varsayımını da isbatlamış oluyoruz. 
+
+Cooks Chart'dan ve Studentized Residuals grafiğinden görebileceğimiz gibi 39 ve 95'ci veriler en etkin değer ve outlier olarak belirlenmiştir. Yukarıda belirttiğimiz nedenlere ilave olarak, modelden -3,3 sınırları içinde olan artıkların çıkarılması R2 değeri 0.2'lerde olan bir modelden çok iyi bir sonuç çıkaracağını düşünmüyoruz. Bu yüzden Linear Regresyon modelimizi final model olarak kabul ediyoruz ve devam ediyoruz. 
+
+```{r}
+model_step_ols = ols_step_both_p(model_lm)
+print(model_step_ols)
+model_step_ols$predictors
+model_step_lm = lm(BWT~UI + SMOKE + RACE + HT + LWT, data = train)
+summary(model_step_lm)
+VIF(model_step_lm)
+shapiro.test(model_step_lm$residuals)
+bptest(model_step_lm)
+ols_plot_resid_qq(model_step_lm)
+ols_plot_resid_hist(model_step_lm)
+ols_plot_cooksd_chart(model_step_lm)
+ols_plot_resid_stud_fit(model_step_lm)
+ols_plot_resid_fit(model_step_lm)
+
+yhat.step_lm = predict(model_step_lm, newdata=test) 
+plot(yhat.step_lm, test$BWT) 
+abline(0,1)
+(mse_step_lm = mean((yhat.step_lm-test$BWT)^2))
+
+```
+## Cross Validation
+Son olarak kurduğumuz modelde k-fold cross validation ve all subsets uygulamasını birlikte yapıyoruz ve bağımsız değişkenleri yeniden belirliyoruz. En iyi sonuç olarak aldığımız bağımsız değişkenler son kurduğumuz modelle aynı. Bu bağımsız değişkenleri dahil ederek ve cross-validation uygulayarak MSE değerini hesaplıyoruz. 
+
+```{r}
+set.seed(431)
+
+predict.regsubsets = function(object, newdata, id, ...){
+  form = as.formula(object$call[[2]])
+  mat = model.matrix(form, newdata)
+  coefi = coef(object, id=id)
+  xvars = names(coefi)
+  mat[,xvars]%*%coefi
+}
+
+k = 10
+
+set.seed(431)
+folds = sample(1:k, nrow(train), replace = TRUE)
+cv.errors = matrix(NA, k, 8, dimnames = list(NULL, paste(1:8)))
+
+
+for(j in 1:k){
+  best.fit = regsubsets(BWT~., data = train[folds!=j,], nvmax = 8)
+  for (i in 1:8){
+    pred = predict(best.fit, train[folds==j,], id=i)
+    cv.errors[j,i]=mean((train$BWT[folds==j]-pred)^2)
+  }
+}
+
+mean.cv.errors = apply(cv.errors, 2, mean)
+par(mfrow=c(1,1))
+plot(mean.cv.errors, type = 'b')
+reg.best = regsubsets(BWT~., data=train, nvmax = 8)
+coef(reg.best, 6)
+
+
+###############################################################################
+
+train.control <- trainControl(method = "LOOCV")
+
+model_cv = train(BWT ~ UI + SMOKE + RACE + HT + LWT, data = train, method = "lm",
+               trControl = train.control)
+
+(mse_cv = (model_cv$results$RMSE)^2)
+
+```
+
+## Regression Tree
+
+Bir sonrakı aşama olarak Regresyon ağacı modelini kuruyoruz ve sonrasında kurulan ağacı Deviance vs Tree Size grafiğinden aldığımız sonuca göre prune ediyoruz. Prune ettikten sonra terminal node sayısı 12'den 8'e düşüyor. UI kategorik değişkeninin en etkin değişken çıkmasını da vurgulamakta fayda vardır. Prune edilen modelde bağımsız değişkenler **UI, LWT, SMOKE ve RACE** olarak belirlenmiştir. Aslında bu değişkenlerin hepsi final linear regresyon modelinde tespit ettiğimiz değişkenlerle aynı. MSE değerleri diğer modellerde olduğu gibi bu modeller için de hesaplanmıştır ve sonda gösterilecektir. 
+
+```{r}
+set.seed(431)
+model_reg.tree = tree(BWT~., train)
+summary(model_reg.tree)
+plot(model_reg.tree) 
+text(model_reg.tree, pretty = 0)
+
+cv.regtree = cv.tree(model_reg.tree) 
+plot(cv.regtree$size, cv.regtree$dev, type="b")
+model_reg.prunetree = prune.tree(model_reg.tree, best = 8)
+summary(model_reg.prunetree)
+plot(model_reg.prunetree) 
+text(model_reg.prunetree, pretty=0)
+
+yhat.prunetree = predict(model_reg.prunetree, newdata = test) 
+(mse_prune = mean((yhat.prunetree-test$BWT)^2)) 
+
+yhat.tree = predict(model_reg.tree, newdata = test)    
+(mse_tree = mean((yhat.tree-test$BWT)^2)) 
+
+
+plot(yhat.tree, test$BWT) 
+abline(0,1)
+
+```
+
+
+
+## Bagging
+
+Bir sonrakı aşama olarak bagging metodünü kullanarak yeni modelimizi kuruyoruz. Bu metodu kullandığımız zaman regresyon ağacıyla kıyasda en büyük avantajımız bootsraping yöntemi kullanılarak veri setinden belirli sayıda veri alınarak çoklu sayıda regresyon ağacı modeli kurulmasıdır. Sonuç olarak bir ağaç plotu çizemiyoruz, ama tahminleme yaptığımız zaman yüzlerle ağacın verdiyi sonuçların ortalamasını alıyoruz ve regresyon ağacından çok daha iyi tahmin yapabiliyoruz. Bagging modeli için çizdiğimiz grafiğe baktığımız zaman UI bağımsız değişkeni modelden çıkarılırsa MSE (mean square error) çok ciddi artış gösterebilir. Sonra ise sırasıyla SMOKE, RACE ve LWT bağımsız değişkenleri modelin MSE değerinin azaltılmasında ciddi katkıda bulunan değişkenlerdir.
+
+```{r}
+set.seed(431)
+model_bag = randomForest(BWT~., data=train, mtry=8, importance=TRUE)
+yhat.bag<-predict(model_bag, newdata=test) 
+plot(yhat.bag,test$BWT) 
+abline(0,1)
+(mse_bag = mean((yhat.bag-test$BWT)^2)) 
+varImpPlot(model_bag)
+
+```
+
+
+## Random Forest
+Son olarak Random Forest modeli kuruyoruz. Random Forest modelinin Bagging'den farkı bağımsız değişken sayısının toplam bağımsız değişkenlerin 1/3'ü kadar olacak şekilde randomly seçilmesidir. Sonuç olarak her hangi çok baskın bağımsız değişkenler diğer değişkenlerin etkisini tamamen gölgede bırakamıyor. Bizim modelde önce ağaç sayısı 1'den 500'e kadar olacak şekilde 500 tane random forest modeli kurulmuş ve MSE değerlerine göre grafik çizilmiştir. Grafikten görebileceğimiz gibi 200-250 üzerinde ağaç kullanarak modele devam etmemizin bir anlamı yoktur.
+250 ağaç sayısı belirlenerek random forest modelini kuruyoruz. Yine de UI bağımsız değişkeni en etkin değişken olarak belirleniyor, ama SMOKE bağımsız değişkeni de neredeyse aynı etkiye sahip söyleyebiliriz. Bagging modelinden çok farklı sonuç alamadık söyleyebiliriz. 
+
+```{r}
+set.seed(431)
+k = 500
+yhat.rmse = matrix(NA, k, 1, dimnames = NULL)
+yhat.mse = matrix(NA, k, 1, dimnames = NULL)
+
+for (i in 1:k){
+  model_rf<-randomForest(BWT~., data = train, mtry = ncol(train)/3, ntree = i, importance = TRUE)
+  yhat.bag<-predict(model_rf, newdata=test)
+  yhat.rmse[i]<-sqrt(mean((yhat.bag-test$BWT)^2))
+  yhat.mse[i]<-mean((yhat.bag-test$BWT)^2)
+}
+
+plot(yhat.mse)
+
+model_rf<-randomForest(BWT~., data = train, mtry = ncol(train)/3, ntree = 250, importance = TRUE)
+yhat.rf<-predict(model_rf, newdata=test) 
+plot(yhat.rf, test$BWT) 
+abline(0,1)
+(mse_rf = mean((yhat.rf-test$BWT)^2))
+varImpPlot(model_rf)
+
+```
+
+
+Son olarak kurduğumuz modeller için MSE değerlerinin kıyaslanmasını yaptığımızda en iyi sonuç Random Forest modelinden alınıyor diye görüyoruz. Lakin Modelin test değerleri ile tahmin değerleri grafiğine baktığımızda çok da iyi tahmin yapamıyoruz noktasına geliyoruz. Kurduğumuz tüm modeller sadece bir birleriyle kıyaslandığı zaman çok az olacak şekilde iyi veya kötü gözükebilir, ama genel olarak baktığımızda elimizdeki veri seti için linear regresyon veya regresyon ağaçı modelleri uygun değildir. Bunu modelleri kurmadan önce veri setini incelediğimiz zaman da korelasyon matrix'de gördüğümüz ilişkilerden de anlayabiliyorduk. 
+
+```{r echo = FALSE, message = FALSE}
+cbind(mse_lm, mse_step_lm, mse_cv, mse_tree, mse_prune, mse_bag, mse_rf)
+
+ggplot()+
+  geom_line(aes(x = seq(1:nrow(test)), y = yhat.rf, colour = "Random Forest"), show.legend = TRUE)+
+  geom_point(aes(x = seq(1:nrow(test)), y = test$BWT, colour= "Actual"), show.legend = TRUE )+
+  geom_line(aes(x = seq(1:nrow(test)), y = yhat.step_lm, colour= "Linear Reg."), linetype = "dotted", size = 1, show.legend = TRUE )+
+  labs(x = "index", y = "Birth Weigth", color = "Legend", title = "Actual, Linear Regression Pred. and Random Forest Pred. on Test Data")
+
+```
+
+## Logistic Regression
+Çalışmanın devamı olarak BWT bağımlı değişkeni modelden veri setinden çıkartılıyor ve LOW bağımlı değişkeni ile logistic regresyon modeli kuruluyor.
+
+```{r echo = FALSE, message = FALSE}
+veri<-read.table("C:/Users/shaig.goyushov/Desktop/My_Folder/Personal/DEU/D5007/lowbwt.txt", header=FALSE)
+colnames(veri) =  c("ID", "LOW", "AGE", "LWT", "RACE", "SMOKE", "PTL", "HT", "UI", "FTV", "BWT")
+head(veri)
+veri = veri[-c(1,11)] #ID ve LOW değişkenleri veri setinden çıkartıldı
+attach(veri)
+summary(veri)
+par(mfrow=c(1,1))
+
+veri$RACE = as.factor(veri$RACE)
+veri$SMOKE = as.factor(veri$SMOKE)
+veri$HT = as.factor(veri$HT)
+veri$UI = as.factor(veri$UI)
+
+set.seed(431)
+sample_size = floor(0.7*nrow(veri))
+
+train_index = sample(nrow(veri), size = sample_size, replace = FALSE)
+train = veri[train_index,]
+test = veri[-train_index,]
+attach(train)
+
+```
+
+İlk olarak tüm bağımsız değişkenleri kullanarak modelimizi kuruyoruz. Model sonuçlarına baktığımızda LWT, SMOKE, HT ve UI bağımsız değişkenleri anlamlı çıkıyor (p < 0.05, katsayı = 1 null hipotezi redd ediliyor). Kurduğumuz model için **Gini Index 0.36** olarak hesaplanmıştır.
+
+```{r}
+
+model_logreg = glm(as.factor(LOW)~., data = train, family = binomial)
+summary(model_logreg)
+(G_logreg = blr_gini_index(model_logreg))
+
+```
+
+
+Full modelde görüldüğü gibi anlamlı olmayan bağımsız değişkenler mevcut. Bu bağımsız değişkenleri elimine etmek için stepwise selection metodun kullanıyoruz. Linear Regression'da yaptığımızdan farklı olarak kullandığımız bu fonksiyon AIC değerlerine göre modele bağımsız değişkenleri ekliyor veya çıkartıyor. 
+İlk olarak bu metodu kullandığımızda **UI, SMOKE, RACE, HT, LWT** bağımsız değişkenleri modele dahil ediliyor. Yukarıda kurduğumuz full modelde de p-value değerlerine baktığımızda RACE dışında diğer 4 bağımsız değişkeni anlamlı bulmuştuk. 
+Race bağımsız değişkeni elimine ederek modeli bir daha kuruyoruz. Son olarak SMOKE bağımsız değişkenin modelden çıkararak bir daha modeli kuruyoruz. Her üç modelin ve full modelin Gini Indexleri aşağıdakı şekilde çıkıyor. Gini Indexleri kıyasladığımız zaman son kurduğumuz modelin en iyi olduğunu tespit ediyoruz (UI, HT ve LWT bağımsız değişkenleri kullarak kurulan model). Son kurduğumuz model için confidence interval'a baktığımızda da katsayıların 1 değerini sınırlar içerisinde içermediğini görüyoruz. Bu da katsayıların anlamlı olduğunu gösteriyor. 
+R square değerlerine baktığımızda full model daha iyi gözüküyor. Modellerin null ve residual deviance değerlerinde de benzer şekilde full model, son kurduğumuz modelden daha iyi gözüküyor. AIC değerlerine baktığımızda ise full model en yüksek AIC değerine sahip ve AIC değeri düşük olan modeli seçmemiz doğru oluyor. Anlamsız katsayıları modelde tutmamak adına son modeli **(model_logreg_step3)** tercih ediyoruz ve bununla devam ediyoruz. 
+```{r}
+step.model=blr_step_aic_both(model_logreg)
+model_logreg_step1 = glm(as.factor(LOW)~UI + RACE + SMOKE + HT + LWT, data=train, family=binomial)
+summary(model_logreg_step1)
+(G_logreg1 = blr_gini_index(model_logreg_step1))
+
+model_logreg_step2 = glm(LOW~UI + SMOKE + HT + LWT, data=train, family=binomial)
+summary(model_logreg_step2)
+(G_logreg2 = blr_gini_index(model_logreg_step2))
+
+cbind(G_logreg, G_logreg2)
+
+model_logreg_step3 = glm(as.factor(LOW)~UI + HT + LWT, data=train, family=binomial)
+summary(model_logreg_step3)
+(G_logreg3 = blr_gini_index(model_logreg_step3))
+
+
+pseudorsq = PseudoR2(model_logreg, which ="all")
+pseudorsq_step = PseudoR2(model_logreg_step3, which ="all")
+cbind(pseudorsq,pseudorsq_step) 
+
+(odds.confint=exp(confint.default(model_logreg_step3)))
+
+cbind(G_logreg, G_logreg1, G_logreg2, G_logreg3)
+
+```
+
+Aşağıdakı grafikde Model tahmin değerleri ve train verisi BWT değerlerini görebiliriz. 
+```{r echo = FALSE, message = FALSE}
+ggplot()+
+  geom_point(aes(x = 1:nrow(train), y = sort(model_logreg_step3$fitted.values), color = "Model"), show.legend = TRUE)+
+  geom_point(aes(x = 1:nrow(train), y = as.numeric(LOW), color = "Actual"), show.legend = TRUE)+
+  labs(x = "index", y = "Birth Weigth Probality", color = "Legend", title = "Actual vs Logistic Regression on Train Data")
+
+
+```
+
+Aşağıdakı grafiklerde pearson ve deviance residuallarını görebiliriz. Deviance Residuals grafiğinde sadece bir tane residual vardır. Pearson residuals grafiğinde de benzer şekilde bir residual 3 sınırı dışında, diğer residuallar 2 sınırına çok yakın. Çok ciddi etki beklemediğimiz için residualları çıkarmadan devam ediyoruz. 
+
+```{r echo = FALSE, message = FALSE}
+pearson.res = residuals(model_logreg_step3,type="pearson")
+deviance.res = residuals(model_logreg_step3,type="deviance")
+par(mfrow = c(1,2))
+plot(pearson.res, ylab = "Pearson Residuals")
+abline(h = 2, col = "red")
+abline(h = -2, col = "red")
+plot(deviance.res, ylab = "Deviance Residuals")
+abline(h = 2, col = "red")
+abline(h = -2, col = "red")
+
+```
+
+Cooks Distance grafiğinde de benzer şekilde 4 tane etkin değer belirliyroruz. Lakin residuals grafiğinde görebileceğimiz gibi bu değerler çok ekstrim noktalarda bulunan residullar değildir ve hepsi -2,2 sınırına yakındır (sadece 53'cü değer modelden çıkarılabilir). Bu yüzden bu değerleri modelden atmadan devam ediyoruz. 
+
+```{r echo = FALSE, message = FALSE}
+glm.diag.plots(model_logreg_step3)
+influencePlot(model_logreg_step3)
+```
+Final modelimizi belirlediğimiz için probability değerleri için cut-off pointi buluyoruz. Bunun için 0.05'den 0.77'e kadar 0.01 aralıklarla cut-off point seçerek sensitivity, specificity ve accuracy değerleri hesaplanıyor ve bu değerler grafik olarak çiziliyor. Accuracy değerinin en yüksek olduğu noktayı cut-off point olarak belirliyoruz (burada sensitivity veya specificity değerleri de baz alınarak cut-off point belirlenebilir. Bu modelin hangi amaçla kullanılacağına ve hangi yönde tahmin yapmanın daha kritik olmasına bağlıdır). Sonrasında ise AUC değeri hesaplanmış ve TPR vs FPR grafiği çizilmiştir. Bu değerler en sonda tablo şeklinde gösterilerek tüm modellerin kıyaslanması yapılacaktır. 
+
+```{r echo=FALSE, message=FALSE}
+x = seq(0.25, 0.77, 0.01)
+total = rep(NA, length(x))
+sens = rep(NA, length(x))
+spec = rep(NA, length(x))
+logreg_pred = predict(model_logreg_step3, type = 'response', newdata = test)
+
+id = 0
+
+for(k in x){
+  id = id + 1
+  logreg_pred = predict(model_logreg_step3, type = 'response', newdata = test)
+  #glm.pred = rep(0, nrow(test))
+  #glm.pred[logreg_pred>k] = 1
+  logreg_pred[logreg_pred>k] = 1
+  logreg_pred[logreg_pred<=k] = 0
+  (t = table(logreg_pred, test$LOW))
+  total[id] = mean(logreg_pred == test$LOW)
+  sens[id] = t[2,2]/(t[1,2]+t[2,2])
+  spec[id] = t[1,1]/(t[1,1]+t[2,1]) 
+}
+
+
+
+ggplot()+
+  geom_line(aes(x = x, y = total, color = "total"), show.legend = TRUE)+
+  geom_line(aes(x = x, y = spec, color = "spec"), show.legend = TRUE)+
+  geom_line(aes(x = x, y = sens, color = "sens"), show.legend = TRUE)+
+  labs(x = "Cut-Point", y = "%", color = "Legend")+
+  geom_vline(xintercept = x[which.max(total)], color = "dark grey")
+```
+
+```{r echo=FALSE, message=FALSE}
+
+logreg_pred = predict(model_logreg_step3, type = 'response', newdata = test)
+(k = x[which.max(total)]) #cut off point
+logreg_pred[logreg_pred>k] = 1
+logreg_pred[logreg_pred<=k] = 0
+k
+(t = table(logreg_pred, test$LOW))
+
+
+(accuracy.log = mean(test$LOW==logreg_pred)) #accuracy
+#(sens.log = sensitivity(test$LOW, logreg_pred, 0.75)) #sensitivity
+#(spec.log = specificity(test$LOW, logreg_pred, 0.75)) #specificity
+
+(sens.log = t[2,2]/(t[1,2]+t[2,2]))
+(spec.log = t[1,1]/(t[1,1]+t[2,1]))
+
+par(mfrow=c(1,1))
+(rcurve_logreg = roc.curve(test$LOW, logreg_pred))
+```
+## Decision Tree
+Bir sonrakı aşamada decision tree modelini kuruyoruz ve sensitivity, specificity, accuracy ve AUC değerlerini belirliyoruz. Kurduğumuz ağacı incelersek bazı node'ların gereksiz olduğunu (iki node sıfır veya bir değerine sahip, bu noktada yeni dalın oluşturulması anlamsız) ve prune edilmesinin gerektiğini görebiliyoruz. En önemli değişken olarak ise LWT belirleniyor.
+
+```{r}
+model_tree =tree(as.factor(LOW)~., train)
+summary(model_tree)
+plot(model_tree)
+text(model_tree ,pretty =0)
+
+tree_pred = predict(model_tree, test, type="class")
+mean(tree_pred==test$LOW) #accuracy
+
+table=table(tree_pred ,test$LOW)
+table
+
+(sens.tree = table[2,2]/(table[1,2]+table[2,2])) #sensitivity
+(spec.tree = table[1,1]/(table[1,1]+table[2,1])) #specificity
+(accuracy.tree = sum(diag(table)/sum(table))) #accuracy
+
+(rcurve_tree=roc.curve(test$LOW, tree_pred))
+```
+
+Kurduğumuz decision tree modelini prune ederek yeni model kuruyoruz. 
+Aşağıdakı grafikden görebileceğimiz gibi 4 node olan model en düşük deviance olan model. Bunu baz alarak prune edilmiş model kurulmuştur.
+```{r}
+model_tree.prune =cv.tree(model_tree ,FUN=prune.misclass )
+model_tree.prune
+par(mfrow=c(1,1))
+plot(model_tree.prune$size ,model_tree.prune$dev ,type="b")
+
+model_tree.cv =prune.misclass(model_tree, best=4)
+plot(model_tree.cv)
+summary(model_tree.cv)
+text(model_tree.cv ,pretty =0)
+prune.pred = predict(model_tree.cv, test , type="class")
+table=table(prune.pred ,test$LOW)
+table
+
+(sens.tree_prune = table[2,2]/(table[1,2]+table[2,2])) #sensitivity
+(spec.tree_prune = table[1,1]/(table[1,1]+table[2,1])) #specificity
+(accuracy.tree_prune = sum(diag(table)/sum(table))) #accuracy
+(rcurve_tree.prune = roc.curve(test$LOW, prune.pred))
+
+
+```
+
+## Bagging 
+
+Bagging modeli kurularak gerekli değerler hesaplanıyor. Bagging modeli sonucunda görebileceğimiz gibi Gini Indexi etkileyen en etkin değişken **LWT** bağımsız değişkenidir. 
+```{r}
+set.seed(431)
+model_bagLOW = randomForest(as.factor(LOW)~., data = train, mtry = 8, importance = TRUE)
+yhat.bag = predict(model_bagLOW, newdata = test) 
+table = table(yhat.bag ,test$LOW)
+table
+(accuracy.bag = sum(diag(table))/sum(table))#accuracy
+(sens.bag = table[2,2]/(table[1,2]+table[2,2])) #sens
+(spec.bag = table[1,1]/(table[1,1]+table[2,1])) #spec
+(rcurve.bag=roc.curve(test$LOW, yhat.bag))
+
+
+
+varImpPlot(model_bagLOW)
+```
+## Random Forest
+
+Random Forest modelini kurduğumuzda farklı sayıda ağaç sayısına sahip 500 tane model kurarak grafik şekilde MSE değerine bakıyoruz ve 100 ağaç sayısının yeterli olduğu kararına geliyoruz. Random Forest modelinde de **LWT** değişkeni Gini Indexi etkileyen en etkin değişken olarak belirlenmiştir. 
+```{r}
+set.seed(431)
+k = 500
+yhat.mat = matrix(NA, k, 1, dimnames = NULL)
+
+for (i in 1:k){
+  model_rfLOW = randomForest(as.factor(LOW)~., data = train, mtry = sqrt(ncol(train)), ntree = i, importance = TRUE)
+  yhat.rf = predict(model_rfLOW, newdata = test)
+  yhat.mat[i] = mean(yhat.rf==test$LOW)
+}
+
+
+ggplot()+
+  geom_line(aes(x = seq(1,k,1), y = yhat.mat, color = "total"), show.legend = TRUE)+
+  labs(x = "Number of Trees", y = "%", color = "Legend")
+
+model_rfLOW = randomForest(as.factor(LOW)~.,data= train, mtry=sqrt(11), ntree=100, importance=TRUE)
+yhat.rf = predict(model_rfLOW, newdata = test) 
+(t = table(yhat.rf, test$LOW))
+
+(accuracy.rf=sum(diag(t))/sum(t)) #accuracy
+(sens.rf = t[2,2]/(table[1,2]+t[2,2])) #sensitivity
+(spec.rf = t[1,1]/(t[1,1]+t[2,1])) #specificity
+(rcurve.rf=roc.curve(test$LOW, yhat.rf)) #auc
+
+
+varImpPlot(model_rfLOW)
+```
+
+## LDA
+
+LDA modelini kurarak accuracy, sensitivity, specificity ve auc değerlerini hesaplıyoruz. LDA modeli kurmadan önce varsayımları kontrol etmemiz gereklidir. İlk plotdan görebileceğimiz gibi her hangi bir bağımsız değişken çifti LOW bağımlı değişken için sonucun 0 veya 1 olacağını net şekilde tahmin edemiyor. Oluşan kümeler neredeyse tamamen bir birinin üstüne denk geliyor. Sabit varyans doğrulaması için Levene's testi yapıyoruz. AGE, FTV, PTL ve LWT bağımsız değişkenleri için p value > 0.05 sonucunu alıyoruz ve homojen varyans null hipotezini redd edemiyoruz. Bağımsız değişkenlerin (AGE, FTV, PTL ve LWT) normal dağılım şartları karşılanmıyor. Grafikden de görebileceğimiz gibi **right skewed** bir dağılıma sahipler. Sahpiro-Wilk testi ile bir daha bu varsayımın karşılanmadığını doğruluyoruz.
+
+LWT, FTV, PTL ve AGE değişkenlerini kullanarak modeli kuruyoruz ve gerekli değerleri hesaplıyoruz. Kurulan model için ldahist() fonksiyonu kullanarak çizdiğimiz grafiğe baktığımızda çok iyi ayrıştırma göremiyoruz. Lakin specificity değeri oldukça yüksektir.  
+
+
+
+```{r echo = FALSE, message = FALSE}
+covEllipses(train[,c("LWT", "AGE", "FTV", "PTL")], train$LOW, fill = TRUE, pooled = FALSE, 
+            col = c("blue", "red"), variables = c("LWT", "AGE", "FTV", "PTL"), 
+            fill.alpha = 0.05)
+
+pairs.panels(train[2:9],
+             gap=0,
+             bg=c("red","blue")[train$LOW],
+             pch=21)
+
+leveneTest(train$AGE ~ as.factor(train$LOW), train)
+leveneTest(train$LWT ~ as.factor(train$LOW), train)
+leveneTest(train$FTV ~ as.factor(train$LOW), train)
+leveneTest(train$PTL ~ as.factor(train$LOW), train)
+shapiro.test(AGE)
+shapiro.test(LWT)
+shapiro.test(FTV)
+shapiro.test(PTL)
+
+set.seed(431)
+model_lda = lda(LOW~AGE + LWT + FTV + PTL, data = train)
+model_lda
+pred_lda = predict(model_lda, train)
+attributes(pred_lda)
+hist_lda = ldahist(data = pred_lda$x, g = train$LOW)
+partimat(as.factor(LOW)~AGE+LWT+FTV+PTL, data = test, method="lda")
+
+#########################
+
+(t = table(Prediction = pred_lda$class, Actual = train$LOW)) #train
+(accuracy = sum(diag(t))/sum(t))
+
+pred_lda = predict(model_lda, test)
+pred = as.numeric(pred_lda$class)
+pred = ifelse(pred<=1,0,1)
+
+(t = table(Prediction = pred_lda$class, Actual = test$LOW)) #test
+(accuracy.lda=sum(diag(t))/sum(t)) #accuracy
+(sens.lda = t[2,2]/(t[1,2]+t[2,2])) #sensitivity
+(spec.lda = t[1,1]/(t[1,1]+t[2,1])) #specificity
+(rcurve.lda = roc.curve(test$LOW, pred)) #auc
+```
+## QDA
+
+QDA modelini kurarak accuracy, sensitivity, specificity ve auc değerlerini hesaplıyoruz. Yine aynı şekilde iki model kurarak bunların kıyaslamasını yapıyoruz. QDA modeli için de sadece LWT, FTV, PTL ve AGE değişkenlerini kullanıyoruz (diğerleri kategorik değişken olduğu için). Gördüğümüz gibi AGE-LWT ve AGE-FTV çiftlerinde apparent error rate QDA metodün kullandığımız zaman daha düşük çıkıyor ve bu da QDA metodünün modelimizde iyileşmeye sebep olabileceği anlamına geliyor.
+```{r echo=FALSE, message=FALSE}
+set.seed(431)
+model_qda = qda(LOW~LWT + AGE + FTV + PTL, data = train)
+model_qda
+pred_qda = predict(model_qda, train)
+
+partimat(as.factor(LOW)~AGE+LWT+FTV+PTL, data = test, method="qda")
+
+(t = table(Prediction = pred_qda$class, Actual = train$LOW)) #train
+(accuracy = sum(diag(t))/sum(t))
+
+pred_qda = predict(model_qda, test)
+pred2 = as.numeric(pred_qda$class)
+pred2 = ifelse(pred2<=1,0,1)
+
+
+
+(t = table(Prediction = pred_qda$class, Actual = test$LOW)) #test
+(accuracy.qda=sum(diag(t))/sum(t)) #accuracy
+(sens.qda = t[2,2]/(t[1,2]+t[2,2])) #sensitivity
+(spec.qda = t[1,1]/(t[1,1]+t[2,1])) #specificity
+(rcurve.qda = roc.curve(test$LOW, pred2)) #auc
+```
+## Sonuçların Karşılaştırılması
+
+Son olarak kurduğumuz modelleri kıyaslayabilmek için tablo ve grafik oluşturuyoruz. Grafikten görebileceğimiz gibi AUC değerlerini kıyaslarsak en iyi sonuç QDA modelinden geliyor ve arkasından Bagging ve Random Forest modelleri takip ediyor. 
+Sensitivity, Specificity, Accuracy ve AUC değerlerinin kıyaslandığı tabloya baktığımızda accuracy olarak en iyi model QDA ve logistic regression modeli olduğunu söyleyebiliriz. 
+Eğer true positive'lerin tahmin edilmesi kritik önem taşıyorsa Bagging ve Random Forest modelleri diğer modellerden çok daha iyi sonuç veriyor.
+True negative'lerin doğru tahmin edilmesi kritikse logistic regresyon, LDA ve QDA modelleri seçilebilir.
+Genel olarak accuracy ve auc değerleri önemliyse QDA modeli bizim seçeceğimiz model olacaktır.
+
+Tüm çalışmayı özetlemek gerekirse, elimizdeki veri seti linear regresyon veya regresyon ağacı kurmak için uygun bir veri seti değildir. Yukarıda da belirttiğimiz gibi aldığımız R square ve MSE değerleri, yapılan tahminlemeler bu modellerin bu veri seti için kullanışlı olmadığını gösterdi. 
+Logistic Regresyon, Bagging ve QDA modelleri ise çok daha iyi sonuçlar vermiştir ve elde ettiğimiz accuracy değerleri bagging ve QDA regresyon modellerinde iyi olduğu söylenebilir. 
+
+```{r echo = FALSE, message = FALSE}
+roc.curve(test$LOW, pred) #LDA Full Model
+roc.curve(test$LOW, logreg_pred, add.roc = TRUE, col = "green") #logistic
+roc.curve(test$LOW, predict(model_bagLOW, newdata = test), add.roc = TRUE, col = "red") #bagging
+roc.curve(test$LOW, predict(model_rfLOW, newdata = test), add.roc = TRUE, col = "blue") #Random Forest
+roc.curve(test$LOW, pred2, add.roc = TRUE, col = "yellow") #QDA Full model
+legend("bottomright", legend = c("LDA", "Logistic", "Bagging", "RF", "QDA"), 
+       fill = c("black", "green", "red", "blue", "yellow"))
+legend("topleft", legend = c(round(rcurve.lda$auc,2), round(rcurve_logreg$auc,2), round(rcurve.bag$auc, 2), round(rcurve.rf$auc,2),  round(rcurve.qda$auc, 2)), 
+       fill = c("black", "green", "red", "blue", "yellow"))
+
+
+results_matrix = matrix(data = NA, 4, 7, 
+                        dimnames = 
+                          list(c("Accuracy", "Sensitivity", "Specificity", "AUC"), 
+                               c("Logistic", "Decision Tree", "Pruned Tree", "Bagging", "Random Forest", "LDA", "QDA")), byrow = FALSE)
+results_matrix[1,] = cbind(accuracy.log, accuracy.tree, accuracy.tree_prune, accuracy.bag, accuracy.rf, accuracy.lda, accuracy.qda)
+results_matrix[2,] = cbind(sens.log, sens.tree, sens.tree_prune, sens.bag, sens.rf, sens.lda, sens.qda)
+results_matrix[3,] = cbind(spec.log, spec.tree, spec.tree_prune, spec.bag, spec.rf, spec.lda, spec.qda)
+results_matrix[4,] = cbind(rcurve_logreg$auc, rcurve_tree$auc, rcurve_tree.prune$auc, rcurve.bag$auc, rcurve.rf$auc, rcurve.lda$auc, rcurve.qda$auc)
+results_matrix
+```
